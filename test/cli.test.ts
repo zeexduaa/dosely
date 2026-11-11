@@ -237,3 +237,24 @@ test("a medication added today doesn't count this morning's doses as missed", as
   await t.run("today");
   assert.match(t.text(), /\[x\] 06:00  Amoxicillin, 1 tablet  taken at 06:10/);
 });
+
+
+test("just after midnight, last night's dose is still due rather than missed", async () => {
+  const t = terminal("2026-03-01 00:00");
+  await t.run("init", "--zone", ZONE);
+  await t.run("add", "Melatonin", "--schedule", "daily 11:45pm");
+  t.at("2026-03-02 00:15");
+  await t.run("today");
+  assert.match(t.text(), /still due from yesterday: 23:45 Melatonin/);
+  t.at("2026-03-02 01:00");
+  await t.run("today");
+  assert.match(t.text(), /missed yesterday: 23:45 Melatonin/);
+});
+
+test("readings and symptoms can't be in the future", async () => {
+  const t = terminal("2026-03-02 09:00");
+  await t.run("init", "--zone", ZONE);
+  assert.equal(await t.run("symptom", "headache", "3", "--at", "2026-03-05 10:00"), 2);
+  assert.match(t.err[0]!, /can't be noted in the future/);
+  assert.equal(await t.run("measure", "pulse", "70", "--at", "2026-03-05 10:00"), 2);
+});

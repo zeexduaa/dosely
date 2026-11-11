@@ -310,7 +310,10 @@ const commands: Record<string, Handler> = {
                 `${item.med.instructions ? `, ${item.med.instructions}` : ""}  ${detail}`);
     }
     const earlier = doses.needsAttention(s.profile, now).filter((i) => i.occurrence.date !== date);
-    for (const i of earlier) s.ctx.out(`  missed yesterday: ${i.occurrence.time} ${medLabel(i.med)}`);
+    for (const i of earlier) {
+      // Just after midnight, last night's dose may still be within its grace period: due, not missed.
+      s.ctx.out(`  ${i.status === "due" ? "still due from yesterday" : "missed yesterday"}: ${i.occurrence.time} ${medLabel(i.med)}`);
+    }
     for (const r of refillsNeeded(s.profile, now)) s.ctx.out(`  refill soon: ${supplyText(r)}`);
     for (const c of scheduleConflicts(s.profile, now)) {
       s.ctx.out(`  timing: ${medLabel(c.a)} at ${c.times[0]} and ${medLabel(c.b)} at ${c.times[1]} are ${c.hoursApart} h apart; ` +
@@ -497,6 +500,7 @@ const commands: Record<string, Handler> = {
     }
     const now = s.ctx.now();
     const when = values.at ? parseWhen(values.at, s.profile.zone, now) : now;
+    if (when > now + 300_000) throw new UsageError("a symptom can't be noted in the future");
     const entry = health.addSymptom(s.profile, positionals.slice(0, -1).join(" "), Number(severity), when, values.note);
     s.dirty = true;
     s.ctx.out(`recorded ${entry.name} (${entry.severity}/10) at ${formatInstant(when, s.profile.zone)}`);

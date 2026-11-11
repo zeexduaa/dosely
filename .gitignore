@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.log
+/dosely.json
+/dosely.json.bak

@@ -79,6 +79,7 @@ function check(doc: any, path: string): void {
       if (!Array.isArray(p[key])) fail(`profile ${p.name}'s ${key} isn't a list`);
     }
     p.settings = { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) };
+    if (!p.targets || typeof p.targets !== "object" || Array.isArray(p.targets)) p.targets = {};
     for (const m of p.medications) {
       if (typeof m?.id !== "string" || typeof m?.name !== "string" || !m.regimen?.schedule?.kind) {
         fail(`a medication in ${p.name} is incomplete`);

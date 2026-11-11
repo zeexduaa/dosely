@@ -78,6 +78,12 @@ export interface SeparationRule {
   note?: string;
 }
 
+/** A target range the user's doctor gave, per value (bp has two: systolic and diastolic). */
+export interface Target {
+  min: (number | null)[];
+  max: (number | null)[];
+}
+
 export interface Settings {
   graceMinutes: number;     // how late a dose can be before it counts as missed
   lowStockDays: number;     // warn when fewer days of supply than this are left
@@ -92,6 +98,7 @@ export interface Profile {
   measurements: Measurement[];
   symptoms: SymptomEntry[];
   rules: SeparationRule[];
+  targets: Record<string, Target>;
   settings: Settings;
 }
 
@@ -114,7 +121,7 @@ export const DEFAULT_SETTINGS: Settings = { graceMinutes: 60, lowStockDays: 7 };
 
 export function newProfile(name: string, zone: string): Profile {
   return { id: newId(), name, zone, medications: [], doses: [], measurements: [], symptoms: [], rules: [],
-           settings: { ...DEFAULT_SETTINGS } };
+           targets: {}, settings: { ...DEFAULT_SETTINGS } };
 }
 
 export function emptyData(name: string, zone: string): Data {

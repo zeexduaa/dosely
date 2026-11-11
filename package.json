@@ -10,6 +10,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "build": "tsc -p .",
+    "prepare": "tsc -p .",
     "test": "tsc -p . && node --test \"dist/test/**/*.test.js\"",
     "start": "node dist/src/cli.js"
   },

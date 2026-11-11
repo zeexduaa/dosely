@@ -92,3 +92,22 @@ test("doses from before a medication was added aren't counted as missed", () => 
   assert.deepEqual(doses.agenda(p, from!, to!, at("2026-03-02 12:31")).map((i) => `${i.occurrence.time} ${i.status}`),
     ["06:00 taken", "14:00 upcoming", "22:00 upcoming"]);
 });
+
+
+test("a late dose answers the dose that was missed, not the next one", () => {
+  const m = med("Metformin", "daily 8am, 8pm");
+  const p = profileWith(m);
+  // Forgot the 8am dose and took it at 2:30pm: that's the morning dose, taken late.
+  assert.equal(doses.logDose(p, m, at("2026-03-02 14:30")).occurrence?.slot, "2026-03-02T08:00");
+  // At 7:10pm the evening dose (50 minutes away) is the one being taken, a little early.
+  assert.equal(doses.logDose(p, m, at("2026-03-02 19:10")).occurrence?.slot, "2026-03-02T20:00");
+});
+
+test("the dose due now wins over one coming up soon", () => {
+  const m = med("Antibiotic", "every 2 hours from 8am");
+  const p = profileWith(m);
+  // 10:20: the 10:00 dose is due; 12:00 is within 2 hours but isn't the one being taken.
+  assert.equal(doses.logDose(p, m, at("2026-03-01 10:20")).occurrence?.slot, "2026-03-01#1");
+  // 11:30: 10:00 is done, 08:00 is missed; the 12:00 dose is coming up, so taking now is for 12:00.
+  assert.equal(doses.logDose(p, m, at("2026-03-01 11:30")).occurrence?.slot, "2026-03-01#2");
+});

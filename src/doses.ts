@@ -13,8 +13,9 @@
  * one was recorded), so adding a medicine at noon doesn't mark the morning missed.
  *
  * A dose record names the scheduled dose ("slot") it answers. Taking a dose without
- * saying which picks the nearest open one within 12 hours; with none near, or for
- * an as-needed medicine, it's an extra dose with no slot.
+ * saying which answers the open one that's due now; otherwise one coming up within
+ * 2 hours (taken a little early); otherwise the latest one missed in the last 12 hours
+ * (taken late). With none of those, or for an as-needed medicine, it's an extra dose.
  */
 
 import { type DoseRecord, type DoseStatus, type Medication, type Profile, DataError, newId, medLabel } from "./model.js";
@@ -35,6 +36,7 @@ export interface AgendaItem {
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const MATCH_WINDOW = 12 * HOUR;
+const EARLY_WINDOW = 2 * HOUR;
 
 /** Every regimen the medication has had, oldest first. */
 export function regimens(med: Medication): Regimen[] {
@@ -123,6 +125,21 @@ export function nextDoses(profile: Profile, now: number, days = 8): AgendaItem[]
   });
 }
 
+/**
+ * Which scheduled dose a "take" without a slot answers. Being late is far more common than being
+ * early, so the latest open dose that's already due wins; a dose that's still to come is chosen
+ * only if it's soon (within EARLY_WINDOW) and nothing is currently due. Simply taking the nearest
+ * one in time recorded a forgotten 8am dose taken at 2:30pm as the 8pm dose, leaving the
+ * morning "missed" and the evening "taken", which could make someone skip their real evening dose.
+ */
+function pickOpenDose(profile: Profile, med: Medication, at: number, taken: Map<string, DoseRecord>): Occurrence | undefined {
+  const open = medOccurrences(med, at - MATCH_WINDOW, at + MATCH_WINDOW).filter((o) => !taken.has(`${med.id}|${o.slot}`));
+  const past = open.filter((o) => o.instant <= at).sort((a, b) => b.instant - a.instant);
+  const soon = open.filter((o) => o.instant > at && o.instant - at <= EARLY_WINDOW).sort((a, b) => a.instant - b.instant);
+  const dueNow = past.find((o) => at - o.instant <= profile.settings.graceMinutes * MINUTE);
+  return dueNow ?? soon[0] ?? past[0];
+}
+
 export interface LogOptions {
   status?: DoseStatus;
   at?: number;               // default: now
@@ -149,10 +166,7 @@ export function logDose(profile: Profile, med: Medication, now: number, options:
     occurrence = medOccurrences(med, at - 8 * 24 * HOUR, at + 8 * 24 * HOUR).find((o) => o.slot === options.slot);
     if (!occurrence) throw new DataError(`${medLabel(med)} has no scheduled dose ${options.slot}`);
   } else if (med.regimen.schedule.kind !== "as-needed") {
-    // The nearest scheduled dose within 12 hours that has nothing recorded yet.
-    occurrence = medOccurrences(med, at - MATCH_WINDOW, at + MATCH_WINDOW)
-      .filter((o) => !taken.has(`${med.id}|${o.slot}`))
-      .sort((a, b) => Math.abs(a.instant - at) - Math.abs(b.instant - at))[0];
+    occurrence = pickOpenDose(profile, med, at, taken);
   }
   if (occurrence) {
     const existing = taken.get(`${med.id}|${occurrence.slot}`);

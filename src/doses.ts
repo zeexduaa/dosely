@@ -9,6 +9,9 @@
  *   taken      recorded as taken (on time, or late: the record keeps when)
  *   skipped    recorded as deliberately not taken
  *
+ * Doses scheduled before the medication was added to dosely are left out (unless
+ * one was recorded), so adding a medicine at noon doesn't mark the morning missed.
+ *
  * A dose record names the scheduled dose ("slot") it answers. Taking a dose without
  * saying which picks the nearest open one within 12 hours; with none near, or for
  * an as-needed medicine, it's an extra dose with no slot.
@@ -91,6 +94,9 @@ export function agenda(profile: Profile, from: number, to: number, now: number, 
   for (const med of meds) {
     for (const occurrence of medOccurrences(med, from, to)) {
       const record = records.get(`${med.id}|${occurrence.slot}`);
+      // Doses from before the medication was added can't have been tracked: leave them out
+      // unless something was recorded for them (a backdated dose).
+      if (!record && occurrence.instant < med.created) continue;
       const item: AgendaItem = { med, occurrence, status: statusOf(profile, occurrence, record, now) };
       if (record) {
         item.record = record;

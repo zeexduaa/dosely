@@ -81,3 +81,14 @@ test("changing the schedule keeps the past judged by the old one", () => {
   assert.equal(later.previous, undefined);
   assert.equal(later.regimen.schedule.kind, "as-needed");
 });
+
+
+test("doses from before a medication was added aren't counted as missed", () => {
+  const m = med("Amoxicillin", "every 8 hours from 6am", { regimen: { start: "2026-03-02" }, created: at("2026-03-02 12:30") });
+  const p = profileWith(m);
+  const [from, to] = doses.dayBounds(p, "2026-03-02");
+  assert.deepEqual(doses.agenda(p, from!, to!, at("2026-03-02 12:31")).map((i) => i.occurrence.time), ["14:00", "22:00"]);
+  doses.logDose(p, m, at("2026-03-02 12:31"), { at: at("2026-03-02 06:10") });     // a backdated dose still shows
+  assert.deepEqual(doses.agenda(p, from!, to!, at("2026-03-02 12:31")).map((i) => `${i.occurrence.time} ${i.status}`),
+    ["06:00 taken", "14:00 upcoming", "22:00 upcoming"]);
+});

@@ -26,3 +26,12 @@ jobs:
         run: |
           node dist/src/cli.js --version
           node dist/src/cli.js help
+      - name: The installed command runs (as people will run it)
+        shell: bash
+        run: |
+          npm install -g .
+          test "$(dosely --version)" = "dosely 0.1.0"
+          export DOSELY_FILE="$RUNNER_TEMP/dosely.json"
+          dosely init --zone UTC
+          dosely add Test --schedule "daily 8am"
+          dosely list | grep -q "once a day: 1 tablet at 08:00"

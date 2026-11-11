@@ -230,8 +230,15 @@ export function dosesCsv(profile: Profile): string {
       const med = medicationById(profile, d.med);
       const p = localParts(d.at, zone);
       return [p.date, p.time, med ? medLabel(med) : d.med, d.status, d.amount, med?.unit ?? "",
-              d.slot && !d.slot.includes("#") ? d.slot.replace("T", " ") : d.slot ?? "", d.note ?? ""];
+              scheduledFor(d.slot, d.due, zone), d.note ?? ""];
     }));
+}
+
+/** The scheduled time as "2026-03-01 08:00". Every-N-hours slots ("2026-03-01#3") need the stored due time. */
+function scheduledFor(slot: string | undefined, due: number | undefined, zone: string): string {
+  if (due !== undefined) return formatInstant(due, zone);
+  if (slot && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(slot)) return slot.replace("T", " ");
+  return "";
 }
 
 export function measurementsCsv(profile: Profile): string {

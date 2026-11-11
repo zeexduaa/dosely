@@ -47,6 +47,7 @@ export interface DoseRecord {
   id: string;
   med: string;              // medication id
   slot?: string;            // the scheduled dose this answers; absent for as-needed or extra doses
+  due?: number;             // when that scheduled dose was due (instant)
   status: DoseStatus;
   at: number;               // when it was taken (or skipped)
   amount: number;

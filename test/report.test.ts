@@ -68,3 +68,12 @@ test("CSV exports quote properly and defuse formulas", () => {
   assert.match(report.measurementsCsv(p), /2026-03-01,07:30,bp,142\/90,mmHg,<b>after stairs<\/b>/);
   assert.match(report.symptomsCsv(p), /2026-03-02,11:00,headache,4,/);
 });
+
+
+test("CSV shows when every-N-hours doses were due, not an internal slot name", () => {
+  const abx = med("Amoxicillin", "every 8 hours from 6am");
+  const p = profileWith(abx);
+  doses.logDose(p, abx, at("2026-03-01 14:20"));
+  const line = report.dosesCsv(p).trim().split("\n")[1]!;
+  assert.equal(line, "2026-03-01,14:20,Amoxicillin,taken,1,tablet,2026-03-01 14:00,");
+});

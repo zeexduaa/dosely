@@ -188,7 +188,10 @@ export function logDose(profile: Profile, med: Medication, now: number, options:
       ". If your doctor told you otherwise, record it with --force");
   }
   const record: DoseRecord = { id: newId(), med: med.id, status, at, amount };
-  if (occurrence) record.slot = occurrence.slot;
+  if (occurrence) {
+    record.slot = occurrence.slot;
+    record.due = occurrence.instant;
+  }
   if (options.note) record.note = options.note;
   profile.doses.push(record);
   if (status === "taken" && med.stock) {

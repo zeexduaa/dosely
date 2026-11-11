@@ -134,7 +134,11 @@ export function parseWhen(text: string, zone: string, now: number): number {
   const today = localParts(now, zone).date;
   const m = /^(?:(today|yesterday|\d{4}-\d{2}-\d{2})\s+)?(.+)$/.exec(t)!;
   const date = m[1] === "yesterday" ? addDays(today, -1) : m[1] && m[1] !== "today" ? parseDate(m[1]) : today;
-  return toInstant(date, parseTime(m[2]!), zone);
+  const instant = toInstant(date, parseTime(m[2]!), zone);
+  // A bare time that hasn't happened yet today means the last time it was that time:
+  // "--at 23:45" typed at 00:30 is last night, not tonight.
+  if (!m[1] && instant > now + 5 * 60_000) return toInstant(addDays(today, -1), parseTime(m[2]!), zone);
+  return instant;
 }
 
 function table(rows: string[][]): string[] {

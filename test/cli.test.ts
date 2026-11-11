@@ -217,6 +217,9 @@ test("times and tapers as typed", () => {
   assert.equal(parseWhen("yesterday 8pm", ZONE, now), clock("2026-03-01 20:00"));
   assert.equal(parseWhen("2026-02-28 07:00", ZONE, now), clock("2026-02-28 07:00"));
   assert.equal(parseWhen("90 min ago", ZONE, now), now - 90 * 60_000);
+  // A bare time later than now is the last time it was that time: last night, just after midnight.
+  assert.equal(parseWhen("23:45", ZONE, clock("2026-03-03 00:30")), clock("2026-03-02 23:45"));
+  assert.equal(parseWhen("today 23:45", ZONE, clock("2026-03-03 00:30")), clock("2026-03-03 23:45"));
   assert.equal(parseWhen("2h ago", ZONE, now), now - 2 * 3_600_000);
   assert.deepEqual(parseTaper("4x5, 2x5,1x3"), [{ amount: 4, days: 5 }, { amount: 2, days: 5 }, { amount: 1, days: 3 }]);
   assert.throws(() => parseTaper("4 for 5"), /AMOUNTxDAYS/);

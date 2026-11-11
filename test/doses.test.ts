@@ -60,3 +60,24 @@ test("what needs attention, and what's next", () => {
     ["B 2026-03-01 21:00 missed", "A 2026-03-02 08:00 missed", "B 2026-03-02 09:00 due"]);
   assert.deepEqual(doses.nextDoses(p, now).map((i) => `${i.med.name} ${i.occurrence.time}`), ["B 21:00", "A 08:00"]);
 });
+
+
+test("changing the schedule keeps the past judged by the old one", () => {
+  const m = med("Metformin", "daily 8am");
+  const p = profileWith(m);
+  doses.logDose(p, m, at("2026-03-01 08:00"));
+  doses.logDose(p, m, at("2026-03-02 08:00"));
+  doses.changeRegimen(m, { ...m.regimen, schedule: { kind: "daily", doses: [{ time: "09:00", amount: 1 }, { time: "21:00", amount: 1 }] } },
+                      "2026-03-03");
+  assert.equal(m.previous!.length, 1);
+  assert.equal(m.previous![0]!.end, "2026-03-02");
+  const [from] = doses.dayBounds(p, "2026-03-01");
+  const [, to] = doses.dayBounds(p, "2026-03-03");
+  assert.deepEqual(doses.agenda(p, from!, to!, at("2026-03-03 22:30")).map((i) => `${i.occurrence.slot} ${i.status}`),
+    ["2026-03-01T08:00 taken", "2026-03-02T08:00 taken", "2026-03-03T09:00 missed", "2026-03-03T21:00 missed"]);
+  // A schedule that hasn't started yet is simply replaced.
+  const later = med("B", "daily 8am", { regimen: { start: "2026-04-01" } });
+  doses.changeRegimen(later, { ...later.regimen, schedule: { kind: "as-needed" } }, "2026-03-03");
+  assert.equal(later.previous, undefined);
+  assert.equal(later.regimen.schedule.kind, "as-needed");
+});

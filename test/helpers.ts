@@ -11,7 +11,7 @@ export function profileWith(...meds: Medication[]): Profile {
   return p;
 }
 
-export function med(name: string, schedule: string, extra: Partial<Medication> & { regimen?: Partial<Regimen> } = {}): Medication {
+export function med(name: string, schedule: string, extra: Partial<Omit<Medication, "regimen">> & { regimen?: Partial<Regimen> } = {}): Medication {
   const { regimen, ...rest } = extra;
   return {
     id: newId(), name, unit: "tablet", created: 0,

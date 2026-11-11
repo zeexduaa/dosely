@@ -34,6 +34,7 @@ export interface Medication {
   pharmacy?: string;
   notes?: string;
   regimen: Regimen;
+  previous?: Regimen[];     // earlier schedules, oldest first, so history is judged by the schedule then in force
   stock?: Stock;
   limits?: AsNeededLimits;
   archived?: boolean;       // stopped; kept for history and reports

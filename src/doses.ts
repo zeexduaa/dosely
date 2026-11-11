@@ -15,8 +15,8 @@
  */
 
 import { type DoseRecord, type DoseStatus, type Medication, type Profile, DataError, newId, medLabel } from "./model.js";
-import { type Occurrence, occurrences } from "./schedule.js";
-import { addDays, localParts, toInstant, formatInstant } from "./time.js";
+import { type Occurrence, type Regimen, occurrences } from "./schedule.js";
+import { addDays, daysBetween, localParts, toInstant, formatInstant, type LocalDate } from "./time.js";
 import { checkDose, type Warning } from "./safety.js";
 
 export type SlotStatus = "upcoming" | "due" | "missed" | DoseStatus;
@@ -32,6 +32,32 @@ export interface AgendaItem {
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const MATCH_WINDOW = 12 * HOUR;
+
+/** Every regimen the medication has had, oldest first. */
+export function regimens(med: Medication): Regimen[] {
+  return [...(med.previous ?? []), med.regimen];
+}
+
+/** Scheduled doses from all of the medication's regimens. */
+export function medOccurrences(med: Medication, from: number, to: number): Occurrence[] {
+  return regimens(med).flatMap((r) => occurrences(r, from, to)).sort((a, b) => a.instant - b.instant);
+}
+
+/**
+ * Changes the schedule from ``date`` on. The old regimen is kept (ending the day before),
+ * so earlier days are still judged by the schedule that applied then.
+ */
+export function changeRegimen(med: Medication, next: Regimen, date: LocalDate): void {
+  const current = med.regimen;
+  if (daysBetween(current.start, date) <= 0) {
+    med.regimen = next;                          // it hasn't started yet: just replace it
+    return;
+  }
+  const ended: Regimen = { ...current, end: addDays(date, -1) };
+  if (current.end && daysBetween(current.end, ended.end!) > 0) ended.end = current.end;
+  med.previous = [...(med.previous ?? []), ended];
+  med.regimen = { ...next, start: date };
+}
 
 export function activeMedications(profile: Profile): Medication[] {
   return profile.medications.filter((m) => !m.archived);
@@ -63,7 +89,7 @@ export function agenda(profile: Profile, from: number, to: number, now: number, 
   const records = recordsBySlot(profile);
   const items: AgendaItem[] = [];
   for (const med of meds) {
-    for (const occurrence of occurrences(med.regimen, from, to)) {
+    for (const occurrence of medOccurrences(med, from, to)) {
       const record = records.get(`${med.id}|${occurrence.slot}`);
       const item: AgendaItem = { med, occurrence, status: statusOf(profile, occurrence, record, now) };
       if (record) {
@@ -114,11 +140,11 @@ export function logDose(profile: Profile, med: Medication, now: number, options:
   const taken = recordsBySlot(profile);
   let occurrence: Occurrence | undefined;
   if (options.slot) {
-    occurrence = occurrences(med.regimen, at - 8 * 24 * HOUR, at + 8 * 24 * HOUR).find((o) => o.slot === options.slot);
+    occurrence = medOccurrences(med, at - 8 * 24 * HOUR, at + 8 * 24 * HOUR).find((o) => o.slot === options.slot);
     if (!occurrence) throw new DataError(`${medLabel(med)} has no scheduled dose ${options.slot}`);
   } else if (med.regimen.schedule.kind !== "as-needed") {
     // The nearest scheduled dose within 12 hours that has nothing recorded yet.
-    occurrence = occurrences(med.regimen, at - MATCH_WINDOW, at + MATCH_WINDOW)
+    occurrence = medOccurrences(med, at - MATCH_WINDOW, at + MATCH_WINDOW)
       .filter((o) => !taken.has(`${med.id}|${o.slot}`))
       .sort((a, b) => Math.abs(a.instant - at) - Math.abs(b.instant - at))[0];
   }

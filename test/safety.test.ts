@@ -47,3 +47,18 @@ test("the schedule check finds regular times that break a rule", () => {
   const conflicts = safety.scheduleConflicts(p, at("2026-03-02 12:00"));
   assert.deepEqual(conflicts.map((c) => [c.times, c.hoursApart]), [[["07:00", "08:00"], 1]]);
 });
+
+
+test("backdated doses are checked against the doses recorded after them", () => {
+  const pain = med("Paracetamol", "as needed", { limits: { maxPerDay: 8, minHoursBetween: 4 } });
+  const p = profileWith(pain);
+  const late = at("2026-03-02 23:00");
+  for (const time of ["10:00", "14:00", "18:00", "22:00"]) doses.logDose(p, pain, late, { at: at(`2026-03-02 ${time}`), amount: 2 });
+  // Adding one for 09:00 makes 10 in the 24 hours ending at 22:00, and is 1 hour before the 10:00 dose.
+  assert.throws(() => doses.logDose(p, pain, late, { at: at("2026-03-02 09:00"), amount: 2 }),
+    /10 tablet\(s\) of Paracetamol in 24 hours; your limit is 8, counting the doses recorded after that time/);
+  const forced = doses.logDose(p, pain, late, { at: at("2026-03-02 09:00"), amount: 2, force: true });
+  assert.match(forced.warnings.find((w) => w.kind === "too-soon")!.message, /1 hour before the Paracetamol recorded at 2026-03-02 10:00/);
+  // A dose far enough back is fine.
+  assert.equal(doses.logDose(p, pain, late, { at: at("2026-03-01 08:00"), amount: 2 }).warnings.length, 0);
+});

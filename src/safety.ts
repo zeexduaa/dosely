@@ -41,29 +41,49 @@ export function checkDose(profile: Profile, med: Medication, at: number, amount:
   const limits = med.limits;
   const mine = takenOf(profile, med.id);
   if (limits?.maxPerDay) {
-    const window = mine.filter((r) => r.at > at - 24 * HOUR && r.at <= at);
-    const used = window.reduce((sum, r) => sum + r.amount, 0);
-    if (used + amount > limits.maxPerDay) {
-      // It becomes fine once enough of the window's doses are more than 24 hours old.
-      let freed = used + amount - limits.maxPerDay;
-      let okFrom = at;
-      for (const r of [...window].sort((a, b) => a.at - b.at)) {
-        okFrom = r.at + 24 * HOUR;
-        freed -= r.amount;
-        if (freed <= 0) break;
+    // Every 24-hour window that would contain the new dose: the one ending at it, and (for a
+    // backdated dose) those ending at each later dose. Checking only the window before the new
+    // dose let a backdated dose push the total over the limit unnoticed.
+    const sumUpTo = (end: number) => mine.filter((r) => r.at > end - 24 * HOUR && r.at <= end)
+      .reduce((sum, r) => sum + r.amount, 0) + amount;
+    const before = sumUpTo(at);
+    const later = mine.filter((r) => r.at > at && r.at < at + 24 * HOUR).map((r) => sumUpTo(r.at));
+    const worst = Math.max(before, ...later);
+    if (worst > limits.maxPerDay) {
+      const message = `that would be ${worst} ${med.unit}(s) of ${medLabel(med)} in 24 hours; your limit is ${limits.maxPerDay}`;
+      const warning: Warning = { kind: "max-per-day", blocking: true, message };
+      if (before > limits.maxPerDay && worst === before) {
+        // It becomes fine once enough of the earlier doses are more than 24 hours old.
+        let excess = before - limits.maxPerDay;
+        let okFrom = at;
+        for (const r of mine.filter((r) => r.at > at - 24 * HOUR && r.at <= at).sort((a, b) => a.at - b.at)) {
+          okFrom = r.at + 24 * HOUR;
+          excess -= r.amount;
+          if (excess <= 0) break;
+        }
+        warning.okFrom = okFrom;
+        warning.message = `${message}. The next dose fits the limit from ${formatInstant(okFrom, zone)}`;
+      } else {
+        warning.message = `${message}, counting the doses recorded after that time`;
       }
-      warnings.push({ kind: "max-per-day", blocking: true, okFrom,
-        message: `that would be ${used + amount} ${med.unit}(s) of ${medLabel(med)} in 24 hours; your limit is ` +
-                 `${limits.maxPerDay}. The next dose fits the limit from ${formatInstant(okFrom, zone)}` });
+      warnings.push(warning);
     }
   }
   if (limits?.minHoursBetween) {
-    const last = mine.filter((r) => r.at <= at).sort((a, b) => b.at - a.at)[0];
-    if (last && at - last.at < limits.minHoursBetween * HOUR) {
-      const okFrom = last.at + limits.minHoursBetween * HOUR;
-      warnings.push({ kind: "too-soon", blocking: false, okFrom,
-        message: `the last ${medLabel(med)} was ${hoursText((at - last.at) / HOUR)} ago (at ${formatInstant(last.at, zone)}); ` +
-                 `your limit is ${limits.minHoursBetween} hours between doses, so from ${formatInstant(okFrom, zone)}` });
+    // The nearest other dose either side: a backdated dose can be too close to a later one.
+    const nearest = [...mine].sort((a, b) => Math.abs(a.at - at) - Math.abs(b.at - at))[0];
+    if (nearest && Math.abs(at - nearest.at) < limits.minHoursBetween * HOUR) {
+      const gap = hoursText(Math.abs(at - nearest.at) / HOUR);
+      if (nearest.at <= at) {
+        const okFrom = nearest.at + limits.minHoursBetween * HOUR;
+        warnings.push({ kind: "too-soon", blocking: false, okFrom,
+          message: `the last ${medLabel(med)} was ${gap} ago (at ${formatInstant(nearest.at, zone)}); ` +
+                   `your limit is ${limits.minHoursBetween} hours between doses, so from ${formatInstant(okFrom, zone)}` });
+      } else {
+        warnings.push({ kind: "too-soon", blocking: false,
+          message: `that's ${gap} before the ${medLabel(med)} recorded at ${formatInstant(nearest.at, zone)}; ` +
+                   `your limit is ${limits.minHoursBetween} hours between doses` });
+      }
     }
   }
   for (const rule of profile.rules) {

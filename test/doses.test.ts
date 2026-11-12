@@ -111,3 +111,16 @@ test("the dose due now wins over one coming up soon", () => {
   // 11:30: 10:00 is done, 08:00 is missed; the 12:00 dose is coming up, so taking now is for 12:00.
   assert.equal(doses.logDose(p, m, at("2026-03-01 11:30")).occurrence?.slot, "2026-03-01#2");
 });
+
+
+test("undo takes back the record entered last, even if it was backdated", () => {
+  const m = med("Vitamin D", "daily 9am", { stock: { count: 10, updated: 0 } });
+  const p = profileWith(m);
+  const now = at("2026-03-03 09:05");
+  doses.logDose(p, m, now);                                         // today's dose
+  doses.logDose(p, m, now, { at: at("2026-03-02 09:00") });        // then yesterday's, after the fact
+  assert.equal(doses.undoLast(p, m, now).slot, "2026-03-02T09:00");
+  assert.equal(p.doses.length, 1);
+  assert.equal(p.doses[0]!.slot, "2026-03-03T09:00");
+  assert.equal(m.stock!.count, 9);
+});

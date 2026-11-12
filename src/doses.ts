@@ -202,12 +202,16 @@ export function logDose(profile: Profile, med: Medication, now: number, options:
   return result;
 }
 
-/** Removes the most recent record of a medication (putting taken units back in stock). */
+/** Removes the last record entered for a medication (putting taken units back in stock). */
 export function undoLast(profile: Profile, med: Medication, now: number): DoseRecord {
+  // The record entered last, not the one with the latest time: after recording today's dose and
+  // then backdating yesterday's, "undo" should take back yesterday's (records are kept in entry order).
   let index = -1;
-  for (let i = 0; i < profile.doses.length; i++) {
-    const r = profile.doses[i]!;
-    if (r.med === med.id && (index < 0 || r.at >= profile.doses[index]!.at)) index = i;
+  for (let i = profile.doses.length - 1; i >= 0; i--) {
+    if (profile.doses[i]!.med === med.id) {
+      index = i;
+      break;
+    }
   }
   if (index < 0) throw new DataError(`nothing is recorded for ${medLabel(med)}`);
   const [record] = profile.doses.splice(index, 1);
